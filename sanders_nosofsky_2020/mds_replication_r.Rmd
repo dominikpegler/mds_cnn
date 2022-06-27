@@ -1,0 +1,197 @@
+---
+title: Testing some MDS solutions on the data 
+output: html_document
+---
+
+
+```{r}
+suppressMessages(library(tidyverse))
+
+rock_images <- "120 Rock Images/*.png"
+judgements <- "Similarity Judgments Data"
+mds_file <- "MDS/mds_120_supplemental_dims.txt"
+```
+
+## Original MDS coordinates
+
+```{r}
+# original MDS coordinates for 120 Rocks Set
+mds_obs <- suppressMessages(read_tsv(mds_file, col_names=FALSE, skip=1))
+
+cat("Number of rocks:     ", nrow(mds_obs))
+cat("\nNumber of dimensions:", ncol(mds_obs))
+```
+
+## Replicated MDS coordinates with R smacof package
+
+```{r}
+# replicated MDS coordinates for 120 Rocks Set
+
+# load judgements into 1 dataframe
+suppressMessages(df_jm <- list.files(path = paste(getwd(),"/", judgements, sep=""), pattern = 'rocks_similarity_120_*', full.names = T) %>%
+  map_dfr(read_table))
+
+df_jm <- df_jm %>%
+ mutate(
+    Rock1Type = sprintf("%02d", as.numeric(Rock1Type)),
+    Rock2Type = sprintf("%02d", as.numeric(Rock2Type)),
+    Rock1Token = sprintf("%02d", as.numeric(Rock1Token)),
+    Rock2Token = sprintf("%02d", as.numeric(Rock2Token))
+ ) %>%
+ mutate(
+  Rock1 = paste(Rock1Type, Rock1Token, sep="_"),
+  Rock2 = paste(Rock2Type, Rock2Token, sep="_")
+ ) %>%
+ select(Rock1, Rock2, Rating)
+
+df_jm$Rating <- as.numeric(df_jm$Rating)
+```
+
+
+```{r}
+suppressMessages(library(smacof))
+```
+
+```{r}
+# Correct order of Rocks so that Rock1 has always a lower number. 
+df_jm$reverse <- FALSE
+df_jm[df_jm$Rock1 > df_jm$Rock2, "reverse"] <- TRUE
+reversed <- df_jm[df_jm$reverse, c("Rock1", "Rock2")]
+df_jm[df_jm$reverse, "Rock1"] <- reversed$Rock2
+df_jm[df_jm$reverse, "Rock2"] <- reversed$Rock1
+df_jm <- select(df_jm, -reverse)
+
+# sort
+df_jm <- arrange(df_jm, Rock1, Rock2)
+
+df_jm_agg <- df_jm %>%
+    group_by(Rock1, Rock2) %>%
+    summarise(Rating = mean(Rating))
+
+rocks <- unique(c(unique(df_jm_agg$Rock1), unique(df_jm_agg$Rock2)))
+
+# empty matrix
+m_sim <- matrix(nrow=length(rocks), ncol=length(rocks))
+
+# fill the matrix
+for (m in 1:length(rocks)) {
+  for (n in 1:length(rocks)) {
+      if (rocks[m]>rocks[n]) {
+          rating_value <- pull(df_jm_agg[(df_jm_agg$Rock1==rocks[n]) & (df_jm_agg$Rock2==rocks[m]), "Rating"])
+      } else {
+          rating_value <- pull(df_jm_agg[(df_jm_agg$Rock1==rocks[m]) & (df_jm_agg$Rock2==rocks[n]), "Rating"])
+      }
+      if (length(rating_value) == 0) rating_value <- NA
+      m_sim[m, n] <- rating_value
+  } 
+}
+```
+
+```{r}
+m_sim
+```
+
+
+```{r}
+m_dist <- dist(t(m_sim)) ## Euclidean distance
+```
+
+```{r}
+?mds
+```
+
+```{r}
+set.seed(298)
+
+# standard solution
+res <- mds(m_dist, ndim=8, type="ordinal", principal=TRUE, init="random", itmax=2000)
+mds_repl <- res$conf
+mds_repl <- scales::rescale(mds_repl, to=c(-5, 5)) # rescale to original mds coords min max
+write.table(mds_repl, "MDS/mds_120_replication_r.txt", row.names = FALSE) # write to file
+
+# bootstrapped solution
+# No difference visible between bootstrap and non-bootstrap method
+# res_boot <- bootmds(res, m_sim, method.dat = "euclidean", nrep = 50)
+```
+
+```{r}
+mds_obs <- read.table("MDS/mds_120_supplemental_dims.txt", skip=1, header=FALSE)
+mds_obs <- select(mds_obs, -c(names(mds_obs)[9:13]))
+```
+
+### Try to find similar solution to original by combinating ...
+... different seeds and dimension orders and correlate these solutions with the original mds coordinates
+
+```{r}
+perm <- function(v) {
+  n <- length(v)
+  if (n == 1) v
+  else {
+    X <- NULL
+    for (i in 1:n) X <- rbind(X, cbind(v[i], perm(v[-i])))
+    X
+  }
+}
+
+dim_permutations <- perm(1:8)
+```
+
+```{r}
+best_seed <- 115 # checked until seed 410
+best_value <- 0.5697673
+best_combination <- c(2,4,8,3,5,1,7,6)
+```
+
+
+```{r}
+for (seed in 410:800) {
+    
+    set.seed(seed)
+    res <- mds(m_dist, ndim=8, type="ordinal", principal=TRUE, init="random", itmax=5000, eps = 1e-09)
+    mds_repl <- res$conf
+    mds_repl <- scales::rescale(mds_repl, to=c(-5, 5))
+    if (seed %% 5 == 0) {
+        cat(seed, "...")
+    }
+    for (j in 1:nrow(dim_permutations)) {
+        dim_repl <- dim_permutations[j, ]
+        rs <- c()
+        for (i in 1:8) {
+            r <- cor(mds_obs[, i], mds_repl[, dim_repl[i]]) 
+            rs <- append(rs, r)
+        }
+
+        if (mean(rs) > best_value) {
+            best_seed <- seed 
+            best_value <- mean(rs) 
+            best_combination <- dim_repl
+            cat("\n", best_seed,": ", best_value, ", Dim repl: ", best_combination, sep="")
+        }
+    }
+}
+
+cat("\n\nFinished.\n\n", best_seed,": ", best_value, ", Dim repl: ", best_combination, sep="")
+```
+
+#### Store mds with optimal random seed and swap dimensions
+
+```{r}
+set.seed(best_seed)
+combination <- best_combination #c(2,4,8,3,5,1,6,7)
+
+# run mds
+res <- mds(m_dist, ndim=8, type="ordinal", principal=TRUE, init="random", itmax=5000, eps = 1e-09)
+mds_repl <- res$conf
+mds_repl <- scales::rescale(mds_repl, to=c(-5, 5)) # rescale to original mds coords min max
+
+# swap dimensions
+mds_repl <- mds_repl[,  combination]
+
+# write to file
+write.table(mds_repl, "MDS/mds_120_replication_r.txt", row.names = FALSE) # write to file
+```
+
+## Plot results
+
+results are plotted in python together with the scikit-learn results in `mds_replication.ipynb`
+
