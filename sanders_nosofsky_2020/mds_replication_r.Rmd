@@ -87,18 +87,11 @@ for (m in 1:length(rocks)) {
 }
 ```
 
-```{r}
-m_sim
-```
-
 
 ```{r}
-m_dist <- dist(t(m_sim)) ## Euclidean distance
+m_dist <- sim2diss(m_sim, method = 10)
 ```
 
-```{r}
-?mds
-```
 
 ```{r}
 set.seed(298)
@@ -137,14 +130,20 @@ dim_permutations <- perm(1:8)
 ```
 
 ```{r}
-best_seed <- 115 # checked until seed 410
+best_seed <- 115 # checked until seed 410 with other distance matrix
 best_value <- 0.5697673
+best_combination <- c(2,4,8,3,5,1,7,6)
+```
+
+```{r}
+best_seed <- 0 # checked until seed 410
+best_value <- 0
 best_combination <- c(2,4,8,3,5,1,7,6)
 ```
 
 
 ```{r}
-for (seed in 410:800) {
+for (seed in 1:800) {
     
     set.seed(seed)
     res <- mds(m_dist, ndim=8, type="ordinal", principal=TRUE, init="random", itmax=5000, eps = 1e-09)
