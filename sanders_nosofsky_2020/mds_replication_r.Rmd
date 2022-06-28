@@ -129,16 +129,11 @@ perm <- function(v) {
 dim_permutations <- perm(1:8)
 ```
 
-```{r}
-best_seed <- 115 # checked until seed 410 with other distance matrix
-best_value <- 0.5697673
-best_combination <- c(2,4,8,3,5,1,7,6)
-```
 
 ```{r}
-best_seed <- 0 # checked until seed 410
-best_value <- 0
-best_combination <- c(2,4,8,3,5,1,7,6)
+best_seed <- 165 # checked until seed 800
+best_value <- 0.6619525
+best_combination <- c(2,3,6,4,8,1,7,5)
 ```
 
 
