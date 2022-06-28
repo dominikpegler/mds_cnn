@@ -131,9 +131,9 @@ dim_permutations <- perm(1:8)
 
 
 ```{r}
-best_seed <- 165 # checked until seed 800
-best_value <- 0.6619525
-best_combination <- c(2,3,6,4,8,1,7,5)
+best_seed <- 998 # checked until seed 2000 #  but try it again with more iterations
+best_value <- 0.6669775
+best_combination <- c(2,4,8,3,7,1,6,5)
 ```
 
 
