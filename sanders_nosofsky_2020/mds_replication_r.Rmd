@@ -131,14 +131,14 @@ dim_permutations <- perm(1:8)
 
 
 ```{r}
-best_seed <- 998 # checked until seed 2000 #  but try it again with more iterations
+best_seed <- 998 # checked until seed 1880 #  but try it again with more iterations
 best_value <- 0.6669775
 best_combination <- c(2,4,8,3,7,1,6,5)
 ```
 
 
 ```{r}
-for (seed in 800:2000) {
+for (seed in 1880:2000) {
     
     set.seed(seed)
     res <- mds(m_dist, ndim=8, type="ordinal", principal=TRUE, init="random", itmax=5000, eps = 1e-09)
